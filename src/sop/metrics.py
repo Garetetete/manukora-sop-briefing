@@ -44,6 +44,8 @@ class SkuMetrics:
     units_on_order: int
     order_arrival_months: int
     has_open_order: bool
+    overstock_units: int = 0
+    overstock_value_usd: float = 0.0
     notes: list[str] = field(default_factory=list)
 
 
@@ -186,6 +188,12 @@ def compute(row: SkuRow) -> SkuMetrics:
     next_month_demand = projected.get(BASELINE_MONTH + 1, baseline)
     revenue_opportunity = next_month_demand * row.retail_price_usd
 
+    # Capital tied up: stock beyond twice the target cover is money sitting in
+    # the warehouse. The brief asks what is at risk, and overstock is a risk of
+    # a different kind from a stockout.
+    excess_threshold = 2 * row.target_months_cover * baseline
+    overstock_units = max(0, row.stock_on_hand - excess_threshold)
+
     notes: list[str] = []
     policy = policy_for(row.sku)
     if policy.note:
@@ -210,6 +218,8 @@ def compute(row: SkuRow) -> SkuMetrics:
         units_on_order=row.units_on_order,
         order_arrival_months=row.order_arrival_months,
         has_open_order=row.has_open_order,
+        overstock_units=overstock_units,
+        overstock_value_usd=round(overstock_units * row.retail_price_usd, 2),
         notes=notes,
     )
 

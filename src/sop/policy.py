@@ -9,15 +9,13 @@ Months 5 and beyond are projected.
 
 from dataclasses import dataclass
 
-MONTH_LABELS: dict[int, str] = {
-    1: "December 2025",
-    2: "January 2026",
-    3: "February 2026",
-    4: "March 2026",
-    5: "April 2026",
-    6: "May 2026",
-    7: "June 2026",
-}
+# M1 is December 2025; every other label is derived, so a month beyond the
+# projection horizon still reads as a date instead of "M9".
+_FIRST_MONTH = (2025, 12)
+_MONTH_NAMES = (
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December",
+)
 
 ACTUAL_MONTHS = (1, 2, 3, 4)
 BASELINE_MONTH = 4
@@ -87,4 +85,6 @@ def policy_for(sku: str) -> SkuPolicy:
 
 def month_label(month: int) -> str:
     """Human-readable label for a month index, for use in the briefing."""
-    return MONTH_LABELS.get(month, f"M{month}")
+    year, first = _FIRST_MONTH
+    index = (first - 1) + (month - 1)
+    return f"{_MONTH_NAMES[index % 12]} {year + index // 12}"
