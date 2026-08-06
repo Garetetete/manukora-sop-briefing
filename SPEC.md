@@ -87,8 +87,8 @@ Revenue opportunity is `retail price x projected monthly demand`.
 - Reorder candidates are SKUs projected to fall below their target cover.
 - Candidates are ranked by revenue opportunity, not by cover risk alone.
 - Where the two rankings disagree, the tension is surfaced rather than silently resolved.
-- A SKU with high revenue opportunity but weakening demand is flagged rather than optimised for
-  blindly.
+- A SKU with high revenue opportunity but below-median growth is flagged rather than optimised
+  for blindly, independently of any other flag it may already carry.
 
 ## REQ-008 — Reorder recommendation with quantity and timing
 
@@ -108,7 +108,9 @@ than silently resolved.
 - Specifically: the brief states the Bioactive Blends launched mid-January 2026, yet the extract
   records December 2025 (M1) sales for them. The system reports the conflict, states the
   assumption adopted, and continues.
-- Any SKU whose figures cannot support a requested calculation is named rather than dropped.
+- A SKU that clears its cover target today but will fall below it within its supplier lead time
+  is reported as a watch item rather than omitted, since clearing the target is not the same as
+  needing no decision.
 
 ## REQ-010 — Executive narrative
 
@@ -117,7 +119,8 @@ what changed, what is at risk, what to do next, and the reasoning behind each re
 
 - The model receives only computed values. It is instructed not to introduce numbers.
 - Generated output is validated: any figure appearing in the narrative that does not match a
-  computed value causes the run to fail loudly rather than ship a wrong briefing.
+  computed value triggers one corrective retry, and if it recurs the run falls back to the
+  deterministic template and warns, rather than shipping a briefing that cannot be trusted.
 - Recommendations state business impact in dollars, not only units.
 
 ## REQ-011 — Runs without credentials

@@ -153,6 +153,64 @@ def rank_recommendations(recs: list[Recommendation]) -> list[Recommendation]:
     return sorted(recs, key=lambda r: r.revenue_opportunity_usd, reverse=True)
 
 
+@dataclass(frozen=True)
+class WatchItem:
+    sku: str
+    projected_cover_months: float
+    target_months_cover: int
+    lead_time_months: int
+    order_by_label: str
+    revenue_opportunity_usd: float
+    description: str
+
+
+def find_watch_items(rows: list[SkuRow], all_metrics: list[SkuMetrics]) -> list[WatchItem]:
+    """SKUs that clear their target today but will not next month.
+
+    Without this, a SKU sitting just above target is simply absent from the
+    briefing -- including, on this extract, the largest single revenue exposure
+    in the range. Clearing the target is not the same as needing no decision,
+    because an order placed after the cover falls inside the lead time is
+    already late.
+    """
+    by_sku = {r.sku: r for r in rows}
+    items: list[WatchItem] = []
+
+    for m in all_metrics:
+        if needs_reorder(m) or policy_for(m.sku).phase_out_after_month is not None:
+            continue
+        lead = lead_time_months(by_sku[m.sku])
+        if m.projected_cover_months >= m.target_months_cover + lead:
+            continue
+
+        order_by = (
+            m.stockout_month - lead
+            if m.stockout_month
+            else BASELINE_MONTH + max(1, int(m.projected_cover_months) - lead)
+        )
+        items.append(
+            WatchItem(
+                sku=m.sku,
+                projected_cover_months=m.projected_cover_months,
+                target_months_cover=m.target_months_cover,
+                lead_time_months=lead,
+                order_by_label=month_label(max(order_by, BASELINE_MONTH + 1)),
+                revenue_opportunity_usd=m.revenue_opportunity_usd,
+                description=(
+                    f"Clears its target today at {m.projected_cover_months:.2f} months against "
+                    f"{m.target_months_cover}, so no order is due yet. But with a "
+                    f"{lead}-month lead time and "
+                    f"${m.revenue_opportunity_usd:,.0f} of monthly revenue behind it, the order "
+                    f"has to be placed by {month_label(max(order_by, BASELINE_MONTH + 1))} "
+                    f"to avoid a stockout"
+                    + (f" in {month_label(m.stockout_month)}" if m.stockout_month else "")
+                    + ". Decide at next month's meeting at the latest."
+                ),
+            )
+        )
+    return sorted(items, key=lambda w: w.revenue_opportunity_usd, reverse=True)
+
+
 def find_tensions(all_metrics: list[SkuMetrics]) -> list[Tension]:
     """Surface cases where the obvious ranking would mislead (REQ-007).
 
@@ -162,6 +220,7 @@ def find_tensions(all_metrics: list[SkuMetrics]) -> list[Tension]:
     tensions: list[Tension] = []
     growths = [m.monthly_growth for m in all_metrics if m.monthly_growth > 0]
     median_growth = sorted(growths)[len(growths) // 2] if growths else 0.0
+    fastest = max(all_metrics, key=lambda m: m.total_trend_change, default=None)
 
     for m in all_metrics:
         policy = policy_for(m.sku)
@@ -171,8 +230,14 @@ def find_tensions(all_metrics: list[SkuMetrics]) -> list[Tension]:
                 Tension(
                     sku=m.sku,
                     description=(
-                        f"Demand is growing {m.total_trend_change * 100:.0f}% across the series, "
-                        f"the fastest in the range, yet the line is being discontinued after "
+                        f"Demand is growing {m.total_trend_change * 100:.0f}% across its measured "
+                        f"window"
+                        + (
+                            ", the largest total change in the range"
+                            if fastest is not None and fastest.sku == m.sku
+                            else ""
+                        )
+                        + f", yet the line is being discontinued after "
                         f"{month_label(policy.phase_out_after_month)}. Worth confirming the "
                         f"phase-out decision was made with this trend visible."
                     ),
@@ -189,7 +254,10 @@ def find_tensions(all_metrics: list[SkuMetrics]) -> list[Tension]:
                     ),
                 )
             )
-        elif m.monthly_growth < median_growth / 2 and m.revenue_opportunity_usd > 20_000:
+        # Deliberately `if`, not `elif`: the brief asks specifically for the
+        # high-revenue/weak-growth tension, and the only SKU that qualifies here
+        # also trips the divergence branch above. An elif would silence it.
+        if m.monthly_growth < median_growth / 2 and m.revenue_opportunity_usd > 20_000:
             tensions.append(
                 Tension(
                     sku=m.sku,

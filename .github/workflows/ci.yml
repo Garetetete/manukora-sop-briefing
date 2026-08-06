@@ -1,0 +1,18 @@
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements-dev.txt
+      - name: Tests run with no credentials and no network access
+        run: python -m pytest
+      - run: python -m ruff check .
+      - name: The briefing generates without any provider configured
+        run: python -m sop.cli --template-only --output /tmp/ci-briefing.md

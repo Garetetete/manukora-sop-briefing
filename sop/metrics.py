@@ -11,7 +11,6 @@ from dataclasses import dataclass, field
 
 from .loader import SkuRow
 from .policy import (
-    ACTUAL_MONTHS,
     BASELINE_MONTH,
     MAX_PROJECTION_MONTHS,
     policy_for,

@@ -15,11 +15,12 @@ changed the design three times:
   mid-January 2026 (mid-M2), but the extract records December 2025 sales for all three. That
   became REQ-009: report the conflict, state the assumption, continue.
 - **The tension the brief warns about is not present.** It asks to flag a SKU with high revenue
-  opportunity but clearly declining demand. No SKU declines; every one grows between 11.7% and
-  46.8%. The real tensions are different — Propolis is the fastest-growing line in the range and
+  opportunity but clearly declining demand. No SKU declines; measured the way the brief
+  specifies, every one grows between 11.7% and 40.0% across its window. The real tensions are different — Propolis is the fastest-growing line in the range and
   is being discontinued, and MGO 100+ is the only SKU where a channel goes backwards.
-- **Static cover understates risk.** With demand growing 6–13% a month, `stock / last month`
-  flatters every SKU. That is why cover is simulated forward rather than divided.
+- **Both static formulas mislead.** With demand growing 3.9–13.2% a month, `stock / last month`
+  understates cover for anything with stock in transit, while `(stock + on order) / last month`
+  overstates it for everything. That is why cover is simulated forward rather than divided.
 
 Checking the rules against the data before designing was the highest-value hour of the exercise.
 
@@ -56,7 +57,8 @@ Hard rules:
 4. Lead with the decision, then the reason.
 5. Plain business English...
 
-Write the briefing with exactly these sections: [seven named sections]
+Write the briefing with exactly these sections: [seven named sections; Method is
+appended in code rather than requested of the model]
 
 --- FACTS ---
 PERFORMANCE BY SKU        (computed demand, trend, cover, revenue opportunity)
@@ -78,8 +80,8 @@ deterministic template. In the final run the guard passed on the first attempt.
 
 **Risk was scoped after reading the first real output.** v2a listed every stockout the simulation
 found, including ones eight to twelve months away. Technically true, useless to an executive. The
-facts block now separates near-term risk, and the prompt says explicitly not to list anything
-beyond three months.
+facts block now carries near-term risk in its own section, and the prompt instructs the model to
+use only that section for the risk narrative.
 
 **Overstock was added because the model found it.** In an early run it observed that MGO 100+ was
 tying up working capital — a fair inference, but one the model had made rather than been given.
@@ -89,6 +91,11 @@ number behind it.
 ---
 
 ## Where AI helped, where it was wrong
+
+**On reconstructing this from git:** items 1 to 5 were found and fixed during development, before
+the module they affect was first committed, so they are not visible as fix commits. The tests
+written to catch them are in the suite and are named for what they check. Item 6 is visible in
+history, as commit `32651c9`.
 
 **Helped:** scaffolding the module layout from the spec, generating the bulk of the test suite,
 and drafting prose. The `docs` and `README` were drafted with AI and edited by hand.

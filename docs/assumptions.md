@@ -46,6 +46,11 @@ arrival, consistent with the brief's note about longer supplier lead times for t
 the SKU below target again by the time the shipment lands. Quantities are rounded up to the
 nearest 50 units, because recommending 863 units implies a precision the forecast does not have.
 
+**A SKU within its lead time of falling below target is a watch item, not a reorder.** Clearing
+the target today is not the same as needing no decision: at a one-month lead time, an order placed
+after cover drops below target is already late. Without this the largest single revenue exposure
+in the extract would have appeared nowhere in the briefing.
+
 **Overstock is defined as stock beyond twice the target cover.** The brief does not ask for this,
 but it asks what is at risk, and capital sitting in a warehouse is a risk of a different kind. The
 threshold is a judgement call, not a standard.

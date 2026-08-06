@@ -86,7 +86,11 @@ def load_extract(path: str | Path) -> list[SkuRow]:
     a numeric field cannot be parsed.
     """
     path = Path(path)
-    with path.open(newline="", encoding="utf-8") as handle:
+    if not path.is_file():
+        raise ExtractError(f"{path}: no such file")
+    # utf-8-sig: a CSV saved from Excel carries a byte-order mark, which would
+    # otherwise turn the first header into "﻿SKU" and report SKU missing.
+    with path.open(newline="", encoding="utf-8-sig") as handle:
         reader = csv.DictReader(handle)
         header = reader.fieldnames or []
         missing = [c for c in REQUIRED_COLUMNS if c not in header]

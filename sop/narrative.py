@@ -3,7 +3,8 @@
 The model receives figures that are already computed and validated, and is asked
 to write prose. It is never asked to calculate. Whatever it returns is then
 checked against the computed values: a number in the narrative that does not
-appear in the facts fails the run rather than shipping a wrong briefing.
+appear in the facts triggers one corrective retry, then falls back to the
+deterministic template rather than shipping a wrong briefing.
 
 If no credentials are available the same facts are rendered by a deterministic
 template, so the briefing is always produced and always correct.
@@ -22,6 +23,8 @@ from .policy import BASELINE_MONTH, MAX_PROJECTION_MONTHS, month_label
 from .rules import (
     DataQualityIssue,
     Recommendation,
+    WatchItem,
+    find_watch_items,
     build_recommendation,
     find_data_quality_issues,
     find_tensions,
@@ -40,6 +43,7 @@ class BriefingFacts:
     recommendations: list[Recommendation]
     tensions: list[Tension]
     data_quality: list[DataQualityIssue]
+    watch_items: list[WatchItem] = field(default_factory=list)
     top_growth: list[SkuMetrics] = field(default_factory=list)
     slowest_growth: list[SkuMetrics] = field(default_factory=list)
     total_revenue_at_risk: float = 0.0
@@ -62,6 +66,7 @@ def build_facts(rows: list[SkuRow]) -> BriefingFacts:
         recommendations=recs,
         tensions=find_tensions(metrics),
         data_quality=find_data_quality_issues(rows),
+        watch_items=find_watch_items(rows, metrics),
         top_growth=ranked_growth[:3],
         slowest_growth=ranked_growth[-3:][::-1],
         total_revenue_at_risk=round(sum(r.revenue_opportunity_usd for r in recs), 2),
@@ -72,10 +77,10 @@ def build_facts(rows: list[SkuRow]) -> BriefingFacts:
 # Numeric guard (REQ-010)
 # --------------------------------------------------------------------------
 
-# Thousand separators must be followed by exactly three digits, so a trailing
-# comma in prose ("April 2026, month 5") is not swallowed into the number.
 NEAR_TERM_LAST_MONTH = BASELINE_MONTH + MAX_PROJECTION_MONTHS
 
+# Thousand separators must be followed by exactly three digits, so a trailing
+# comma in prose ("April 2026, month 5") is not swallowed into the number.
 _NUMBER = re.compile(r"\d+(?:,\d{3})*(?:\.\d+)?")
 
 # Month indices, list positions and calendar years are structural, not claims
@@ -121,6 +126,14 @@ def allowed_numbers(facts: BriefingFacts) -> set[str]:
         ):
             allowed |= _variants(float(value))
 
+    for m in facts.metrics:
+        allowed |= _variants(float(m.baseline_demand * m.retail_price_usd))
+
+    for w in facts.watch_items:
+        for value in (w.projected_cover_months, w.target_months_cover,
+                      w.lead_time_months, w.revenue_opportunity_usd):
+            allowed |= _variants(float(value))
+
     for r in facts.recommendations:
         for value in (
             r.reorder_units,
@@ -142,6 +155,7 @@ def allowed_numbers(facts: BriefingFacts) -> set[str]:
     derived += [m.channel_divergence or "" for m in facts.metrics]
     derived += [r.reasoning for r in facts.recommendations]
     derived += [t.description for t in facts.tensions]
+    derived += [w.description for w in facts.watch_items]
     derived += [i.description + " " + i.assumption for i in facts.data_quality]
     for text in derived:
         allowed |= {m.group(0) for m in _NUMBER.finditer(text)}
@@ -153,10 +167,6 @@ def find_unsupported_numbers(text: str, allowed: set[str]) -> list[str]:
     """Numbers in the narrative that do not correspond to a computed figure."""
     found = [m.group(0) for m in _NUMBER.finditer(text)]
     return sorted({n for n in found if n not in allowed and n.rstrip("0").rstrip(".") not in allowed})
-
-
-class NarrativeError(RuntimeError):
-    """The model produced a briefing that cannot be trusted."""
 
 
 # --------------------------------------------------------------------------
@@ -203,9 +213,13 @@ def facts_block(facts: BriefingFacts) -> str:
 
     lines.append("PERFORMANCE BY SKU")
     for m in facts.metrics:
+        first, last = m.trend_window
+        series = " / ".join(str(m.demand[x]) for x in range(first, last + 1))
         lines.append(
-            f"- {m.sku}: sold {m.baseline_demand} units this month "
-            f"(trend {m.total_trend_change * 100:+.1f}% across the measured window, "
+            f"- {m.sku}: sold {m.baseline_demand} units this month, "
+            f"${m.baseline_demand * m.retail_price_usd:,.0f} at retail; "
+            f"monthly units {month_label(first)} to {month_label(last)}: {series} "
+            f"(trend {m.total_trend_change * 100:+.1f}% across that window, "
             f"{m.monthly_growth * 100:+.1f}% per month); "
             f"retail ${m.retail_price_usd:.2f}; "
             f"stock {m.stock_on_hand} units; "
@@ -243,6 +257,9 @@ def facts_block(facts: BriefingFacts) -> str:
     else:
         lines.append("- None.")
 
+    lines += ["", "WATCH LIST (clears target today, needs a decision before it does not)"]
+    lines += [f"- {w.sku}: {w.description}" for w in facts.watch_items] or ["- None."]
+
     lines += ["", "REORDER RECOMMENDATIONS, ranked by revenue at stake"]
     if facts.recommendations:
         for i, r in enumerate(facts.recommendations, 1):
@@ -269,7 +286,7 @@ def facts_block(facts: BriefingFacts) -> str:
     lines += [
         "",
         "METHOD",
-        f"- Demand is Shopify plus Amazon pooled, since stock is shared.",
+        "- Demand is Shopify plus Amazon pooled, since stock is shared.",
         f"- The latest month is the sell-through baseline; demand is projected "
         f"forward at each SKU's own growth rate for at most {MAX_PROJECTION_MONTHS} months.",
         "- Cover is simulated month by month; incoming orders count only in the "
@@ -461,9 +478,17 @@ def render_template(facts: BriefingFacts) -> str:
     out.append("")
 
     out += ["## What sold well and what did not", ""]
-    for m in facts.top_growth:
+    by_revenue = sorted(facts.metrics, key=lambda m: m.baseline_demand * m.retail_price_usd,
+                        reverse=True)[:2]
+    for m in by_revenue:
         out.append(
-            f"- **{m.sku}** — {m.baseline_demand} units, {m.monthly_growth * 100:+.1f}% per month, "
+            f"- **{m.sku}** is the biggest line by revenue this month: {m.baseline_demand} units, "
+            f"${m.baseline_demand * m.retail_price_usd:,.0f} at retail, "
+            f"{m.monthly_growth * 100:+.1f}% per month."
+        )
+    for m in facts.top_growth[:2]:
+        out.append(
+            f"- **{m.sku}** grew fastest at {m.monthly_growth * 100:+.1f}% per month, "
             f"${m.revenue_opportunity_usd:,.0f} of monthly revenue."
         )
     if worst:
@@ -498,6 +523,13 @@ def render_template(facts: BriefingFacts) -> str:
             f"**{i}. {r.sku} — order {r.reorder_units} units by {r.order_by_label}.** {r.reasoning}"
         )
         out.append("")
+
+    out += ["## Watch list", ""]
+    for w in facts.watch_items:
+        out.append(f"- **{w.sku}** — {w.description}")
+    if not facts.watch_items:
+        out.append("- Nothing else needs a decision before next month.")
+    out.append("")
 
     out += ["## Judgement calls", ""]
     for t in facts.tensions:

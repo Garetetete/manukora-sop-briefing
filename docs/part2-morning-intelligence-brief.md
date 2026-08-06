@@ -46,14 +46,13 @@ Every candidate is classified into one of three kinds, because they are differen
 an executive reads them differently:
 
 - **Changed overnight** — one period outside its expected range: revenue, units, conversion,
-  refunds, Amazon buy-box share, or a spike in Gorgias tickets under one tag.
-- **Trending the wrong way** — a sustained drift, not a blip: three consecutive days below the
+  refunds, Amazon buy-box share, a spike in Gorgias tickets under one tag.
+- **Trending the wrong way** — sustained drift, not a blip: three consecutive days below the
   expected range, or a negative rolling slope over fourteen. A dip that recovers never reaches the
   brief; a slow slide no single day would flag does.
 - **Needs a decision today** — anything with a deadline. Stock cover falling inside supplier lead
-  time, so a purchase order placed tomorrow is already late. A promotion ending. A suppressed
-  Amazon listing. These lead the brief even at smaller dollar value, because the other two can
-  wait a day and this cannot.
+  time, so an order placed tomorrow is already late. A promotion ending. A suppressed Amazon
+  listing. These lead the brief even at smaller value, because the other two can wait a day.
 
 Each candidate gets a materiality score: estimated dollar impact multiplied by how far it sits
 outside the expected range, with decision-deadline items weighted up. Anything below the
@@ -76,15 +75,15 @@ hour — say 11:00 in the timezone their **Google Calendar** reports, which trav
 sends anyway.
 
 They control two settings: a preferred delivery hour and a quiet window it must not breach. If
-something material lands after sending, we **edit the existing message** with `chat.update` and add
-an "updated" line rather than pinging twice. One message a day, always in the same place.
+something material lands after sending, we **edit the existing message** with `chat.update` rather
+than pinging twice. One message a day, always in the same place.
 
 ## Keeping it useful instead of noisy
 
 The hard cap of three is the main defence. Beyond it: same-issue suppression, so a signal that
 fired yesterday returns only if it worsens by a set margin; seasonality-aware baselines; and a
-👍/👎 reaction logged against each brief's signals, with a monthly review raising the threshold on
-anything consistently ignored. The system should get quieter over time, not louder.
+👍/👎 reaction logged per signal, with a monthly review raising the threshold on anything
+consistently ignored. The system should get quieter over time, not louder.
 
 ## Failure modes
 
@@ -94,16 +93,15 @@ a caveat line, not a hidden gap.
 
 Then: **a job that never runs** — a dead-man's switch posts to an ops channel if nothing is
 published by 12:00 PT. **Rate limits**, handled by nightly batch reads with backoff rather than
-live queries against Shopify's GraphQL budget or SP-API. **DST**, handled by storing UTC and
-rendering in the recipient's calendar timezone. And **model failure**, covered by the template
-fallback above.
+live queries. **DST**, handled by storing UTC and rendering in the recipient's calendar timezone.
+And **model failure**, covered by the template fallback above.
 
 ## Rough operating cost
 
 At Manukora's scale the AI is the cheapest part. One brief a day is roughly 6k input and 600
 output tokens: under **$1 a month** on Gemini Flash, under $5 on a Pro model. The real cost is
-infrastructure — n8n and a small Postgres instance, about **$40–70 a month** combined. Source APIs
-come with subscriptions Manukora already pays for.
+infrastructure — n8n and a small Postgres instance, about **$40–70 a month**. Source APIs come
+with subscriptions Manukora already pays for.
 
-Call it **under $75 a month**, dominated by hosting. That leaves room to run the stronger model
-for the writing step, which is the only place quality is visible.
+Call it **under $75 a month**, dominated by hosting, which leaves room to run the stronger model
+for the writing step.

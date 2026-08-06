@@ -27,7 +27,7 @@ def test_req_003_bioactive_trend_starts_at_m2_because_it_launched_mid_m2():
 
 
 def test_req_003_launch_exception_changes_the_reported_growth(by_sku):
-    """Measuring a mid-series launch from M1 would understate its real growth."""
+    """Measuring a mid-series launch from M1 would overstate its real growth."""
     row = by_sku["Bioactive Blend Recovery 250g"]
     from_m1 = average_monthly_growth(row.demand, (1, 4))
     from_m2 = average_monthly_growth(row.demand, (2, 4))

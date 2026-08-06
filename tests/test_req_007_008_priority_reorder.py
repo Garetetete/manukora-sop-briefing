@@ -99,3 +99,60 @@ def test_req_008_open_order_is_acknowledged_in_the_reasoning(by_sku):
     row = by_sku["Manuka Honey MGO 1700+ 100g"]
     rec = build_recommendation(row, compute(row))
     assert "400 units arrive" in rec.reasoning
+
+
+# --- watch list and the tension the brief names -----------------------------
+
+def test_req_007_biggest_exposure_is_not_silently_dropped(rows):
+    """MGO 263+ 500g clears its target, carries the largest revenue in the
+    range, and would otherwise appear nowhere in the briefing."""
+    from sop.rules import find_watch_items
+
+    watch = find_watch_items(rows, compute_all(rows))
+    top = watch[0]
+    assert top.sku == "Manuka Honey MGO 263+ 500g"
+    assert top.revenue_opportunity_usd > max(
+        r.revenue_opportunity_usd for r in _candidates(rows)
+    )
+    assert "May 2026" in top.order_by_label
+
+
+def test_req_007_watch_list_excludes_what_is_already_ordered_or_healthy(rows):
+    from sop.rules import find_watch_items
+
+    names = {w.sku for w in find_watch_items(rows, compute_all(rows))}
+    assert "Manuka Honey MGO 100+ 250g" not in names   # 7.38 months of cover
+    assert "Manuka Honey MGO 514+ 500g" not in names   # already a reorder
+    assert "Propolis Tincture 30ml" not in names       # being phased out
+
+
+def test_req_007_watch_list_catches_the_sku_saved_only_by_inbound_stock(rows):
+    """MGO 1700+ clears three months only because 400 units are in transit."""
+    from sop.rules import find_watch_items
+
+    assert "Manuka Honey MGO 1700+ 100g" in {
+        w.sku for w in find_watch_items(rows, compute_all(rows))
+    }
+
+
+def test_req_007_high_revenue_weak_growth_tension_actually_fires(rows):
+    """The brief asks for this specific tension. It must not be swallowed by
+    the channel-divergence branch, which flags the same SKU."""
+    tensions = find_tensions(compute_all(rows))
+    weak = [t for t in tensions if "below the range median" in t.description]
+    assert len(weak) == 1
+    assert weak[0].sku == "Manuka Honey MGO 100+ 250g"
+
+
+def test_req_007_phase_out_superlative_is_computed_not_asserted():
+    """A hardcoded 'fastest in the range' would ship as fact past the numeric
+    guard, which only checks digits."""
+    from sop.rules import find_tensions as ft
+
+    slow_propolis = make_row(sku="Propolis Tincture 30ml", shopify=(100, 101, 102, 103),
+                             amazon=(0, 0, 0, 0), stock_on_hand=50, retail_price_usd=34.99)
+    fast_other = make_row(sku="Manuka Honey MGO 263+ 250g", shopify=(100, 200, 400, 800),
+                          amazon=(0, 0, 0, 0), stock_on_hand=99_000, retail_price_usd=34.99)
+    described = [t.description for t in ft([compute(slow_propolis), compute(fast_other)])
+                 if t.sku == "Propolis Tincture 30ml"]
+    assert described and "largest total change" not in described[0]

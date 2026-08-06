@@ -89,7 +89,7 @@ def test_req_006_premium_sku_clears_its_three_month_target_once_inbound_stock_co
 
 
 def test_req_006_phase_out_sku_is_not_reordered_above_its_floor(by_sku):
-    """Propolis sits near 41 days of cover: flagged, but above the 30-day floor."""
+    """Propolis sits near 36 days of cover: flagged, but above the 30-day floor."""
     metrics = compute(by_sku["Propolis Tincture 30ml"])
     assert metrics.projected_cover_months < metrics.target_months_cover
     assert metrics.projected_cover_months > 1.0

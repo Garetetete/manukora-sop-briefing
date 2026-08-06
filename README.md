@@ -4,6 +4,9 @@ Turns a monthly sales and inventory extract into a briefing a non-technical exec
 five minutes and act on: what changed, what is at risk, what to do next.
 
 **[Read the generated briefing →](output/sop-briefing-2026-03.md)** — no setup required.
+Written by `gemini-3.1-pro-preview`. The
+[template-rendered version](output/sop-briefing-2026-03-template.md) is committed beside it, so
+the two paths can be compared.
 
 **[Part 2: Morning Intelligence Brief architecture →](docs/part2-morning-intelligence-brief.md)**
 
@@ -87,22 +90,25 @@ From the twelve-SKU extract it flags four reorders, ranked by revenue at stake:
 |---|---|---:|---|---:|---:|
 | 1 | MGO 514+ 500g | 650 units | April 2026 | 1.75 mo | $34,316/mo |
 | 2 | MGO 850+ 500g | 450 units | April 2026 | 1.58 mo | $29,477/mo |
-| 3 | Bioactive Energy 250g | 750 units | April 2026 | 1.62 mo | $17,396/mo |
-| 4 | Bioactive Recovery 250g | 800 units | April 2026 | 1.42 mo | $16,476/mo |
+| 3 | Bioactive Blend Energy 250g | 750 units | April 2026 | 1.62 mo | $17,396/mo |
+| 4 | Bioactive Blend Recovery 250g | 800 units | April 2026 | 1.42 mo | $16,476/mo |
 
-Plus two judgement calls and three data-quality conflicts it refused to resolve silently.
+Plus two watch items that need a decision before next month, three judgement calls, and three
+data-quality conflicts it refused to resolve silently.
 
 ## Four decisions worth explaining
 
-**Cover is simulated, not divided.** The obvious formula is
-`(stock + units_on_order) / monthly_demand`. It is wrong twice over: it credits stock that has not
-arrived, and it assumes demand stays flat while every SKU here grows 6–13% a month.
+**Cover is simulated, not divided.** Both obvious shortcuts are wrong, in opposite directions.
+`stock / monthly_demand` ignores stock already in transit. `(stock + units_on_order) /
+monthly_demand` credits it as if it were on the shelf today. And both assume demand stays flat
+while every SKU here grows between 3.9% and 13.2% a month.
 
 Cover is instead walked forward month by month, crediting an inbound order only in the month it
-lands. **This changes an answer.** MGO 1700+ reads as short on the static ratio — 840 units
-against 300 a month is 2.80 months against a three-month target — but 400 units arrive in month
-two, lifting real cover to 3.35. The static calculation would have triggered an unnecessary
-purchase order on the most expensive line in the range. That case is a named test.
+lands. **This changes answers in both directions.** MGO 1700+ reads as short on stock alone —
+840 units against 300 a month is 2.80 months against a three-month target — but 400 units arrive
+in month two, so real cover is 3.35 and no order is due. Read the other way, `(840 + 400) / 300`
+gives 4.13 months and hides that the SKU still needs a decision before June. The simulation gives
+3.35 and puts it on the watch list. That case is a named test.
 
 **`Order_Arrival_Months = 0` means no order exists.** Six of the twelve rows carry it. Read as an
 immediate arrival it inflates every cover figure that depends on it, and nothing errors. There is
@@ -164,9 +170,10 @@ deterministically, and it is held to the same numeric standard by the same test.
 
 ## Tests
 
-**72 tests, no network, no credentials, no database.**
+**77 tests, no network, no credentials, no database.**
 
 ```bash
+pip install -r requirements-dev.txt
 python -m pytest
 ```
 
@@ -183,13 +190,44 @@ from specification to implementation to proof is explicit.
 | `test_req_010_011_012_narrative.py` | Numeric guard, retry, fallback, CLI |
 
 Three bugs were found by these tests rather than by reading code, including two cases where my own
-assumption was wrong and the implementation was right. Both are written up in
-[`docs/prompt-log.md`](docs/prompt-log.md).
+assumption was wrong and the implementation was right. All three, and three further defects found
+by other means, are written up in [`docs/prompt-log.md`](docs/prompt-log.md).
+
+## Prompting and AI usage
+
+Full detail, including where the AI was wrong, is in
+[`docs/prompt-log.md`](docs/prompt-log.md). In short:
+
+**The first instruction I tried** was the obvious one — paste the CSV, ask for a briefing:
+
+```
+Write a monthly S&OP briefing for a non-technical executive from the data below.
+Cover what sold well, what is at risk, and what to reorder. Explain your reasoning.
+[CSV pasted]
+```
+
+It read fluently and could not be trusted. Cover ratios that did not reconcile, and units on
+order treated as stock in hand.
+
+**What the system actually uses** is in [`sop/narrative.py`](sop/narrative.py): a rule that the
+model may only restate figures given to it, seven named sections, and a FACTS block containing
+computed performance, near-term risk, capital tied up, the watch list, ranked recommendations,
+judgement calls and data-quality conflicts.
+
+**What changed and why.** The model stopped calculating — that is the whole design, not a prompt
+tweak. Its output is checked rather than trusted. Risk was scoped to three months after the first
+real run listed stockouts twelve months out. And overstock became a computed field because the
+model inferred it unprompted; rather than delete a fair observation, I gave it a number.
+
+**Where the AI was wrong.** Six defects are written up. The most useful: two of my own test
+assertions were wrong while the code was right, and the run command in an earlier version of this
+README did not work from a clean clone — the suite had passed throughout, because only using the
+artifact the way a stranger would could catch it.
 
 ## How verification was done
 
-Beyond the suite: the deterministic template is run through the same numeric guard as the model,
-so the fallback cannot drift; the generated briefing is re-checked against the computed figures
+Beyond the suite: the deterministic template is held to the same numeric guard as the model by
+a test, so the fallback cannot drift; the generated briefing is re-checked against the computed figures
 after every run; and the reorder arithmetic was reproduced by hand against the extract before the
 thresholds were fixed.
 
@@ -203,6 +241,7 @@ docs/
   prompt-log.md             prompt v1 to v2, and where the AI was wrong
   assumptions.md            every judgement call, and what the extract lacks
   part2-...md               Morning Intelligence Brief architecture
+tests/                      77 tests, one module per requirement
 sop/
   policy.py                 business exceptions, declarative and in one place
   loader.py                 read and validate; refuses to guess
