@@ -72,7 +72,7 @@ def test_req_006_the_target_actually_drives_the_decision():
     """A SKU at 2.5 months of cover is short against a 3-month target and fine
     against a 2-month one. Hard-coding 2 would silently mis-handle the premium
     line."""
-    base = dict(shopify=(100, 100, 100, 100), amazon=(0, 0, 0, 0), stock_on_hand=250)
+    base = {"shopify": (100, 100, 100, 100), "amazon": (0, 0, 0, 0), "stock_on_hand": 250}
     assert needs_reorder(compute(make_row(**base, target_months_cover=3))) is True
     assert needs_reorder(compute(make_row(**base, target_months_cover=2))) is False
 

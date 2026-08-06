@@ -2,6 +2,7 @@
 
 import pytest
 
+from sop.cli import main
 from sop.narrative import (
     BriefingFacts,
     TemplateProvider,
@@ -12,7 +13,6 @@ from sop.narrative import (
     generate_briefing,
     render_template,
 )
-from sop.cli import main
 
 
 class FakeModel:
@@ -24,7 +24,7 @@ class FakeModel:
         self.replies = list(replies)
         self.prompts: list[str] = []
 
-    def generate(self, facts, prompt):  # noqa: ARG002
+    def generate(self, facts, prompt):
         self.prompts.append(prompt)
         return self.replies.pop(0) if self.replies else ""
 
@@ -32,7 +32,7 @@ class FakeModel:
 class BrokenModel:
     name = "broken"
 
-    def generate(self, facts, prompt):  # noqa: ARG002
+    def generate(self, facts, prompt):
         raise RuntimeError("provider unavailable")
 
 

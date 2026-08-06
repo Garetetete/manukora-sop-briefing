@@ -23,14 +23,14 @@ from .policy import BASELINE_MONTH, MAX_PROJECTION_MONTHS, month_label
 from .rules import (
     DataQualityIssue,
     Recommendation,
+    Tension,
     WatchItem,
-    find_watch_items,
     build_recommendation,
     find_data_quality_issues,
     find_tensions,
+    find_watch_items,
     needs_reorder,
     rank_recommendations,
-    Tension,
 )
 
 
@@ -85,7 +85,7 @@ _NUMBER = re.compile(r"\d+(?:,\d{3})*(?:\.\d+)?")
 
 # Month indices, list positions and calendar years are structural, not claims
 # about the business, so they are always permitted.
-_STRUCTURAL = {str(n) for n in range(0, 13)} | {"2025", "2026"}
+_STRUCTURAL = {str(n) for n in range(13)} | {"2025", "2026"}
 
 
 def _variants(value: float) -> set[str]:
@@ -239,7 +239,7 @@ def facts_block(facts: BriefingFacts) -> str:
         for m in sorted(near, key=lambda m: m.revenue_opportunity_usd, reverse=True):
             lines.append(
                 f"- {m.sku}: runs out in {month_label(m.stockout_month)}, "
-                f"${m.revenue_opportunity_usd:,.0f} per month exposed"
+                + f"${m.revenue_opportunity_usd:,.0f} per month exposed"
             )
     else:
         lines.append("- None.")
@@ -287,10 +287,14 @@ def facts_block(facts: BriefingFacts) -> str:
         "",
         "METHOD",
         "- Demand is Shopify plus Amazon pooled, since stock is shared.",
-        f"- The latest month is the sell-through baseline; demand is projected "
-        f"forward at each SKU's own growth rate for at most {MAX_PROJECTION_MONTHS} months.",
-        "- Cover is simulated month by month; incoming orders count only in the "
-        "month they arrive.",
+        (
+            "- The latest month is the sell-through baseline; demand is projected forward at "
+            f"each SKU's own growth rate for at most {MAX_PROJECTION_MONTHS} months."
+        ),
+        (
+            "- Cover is simulated month by month; incoming orders count only in the month "
+            "they arrive."
+        ),
     ]
     return "\n".join(lines)
 
@@ -314,7 +318,7 @@ class LLMProvider(Protocol):
 
     name: str
 
-    def generate(self, facts: "BriefingFacts", prompt: str) -> str: ...
+    def generate(self, facts: BriefingFacts, prompt: str) -> str: ...
 
 
 class TemplateProvider:
@@ -322,7 +326,7 @@ class TemplateProvider:
 
     name = "template"
 
-    def generate(self, facts: BriefingFacts, prompt: str) -> str:  # noqa: ARG002
+    def generate(self, facts: BriefingFacts, prompt: str) -> str:
         return render_template(facts)
 
 
@@ -351,7 +355,7 @@ class GeminiProvider:
             raise RuntimeError("no credentials: set GEMINI_API_KEY or GCP_PROJECT")
         self._model = model or os.getenv("SOP_MODEL", self.default_model)
 
-    def generate(self, facts: BriefingFacts, prompt: str) -> str:  # noqa: ARG002
+    def generate(self, facts: BriefingFacts, prompt: str) -> str:
         response = self._client.models.generate_content(model=self._model, contents=prompt)
         return (response.text or "").strip()
 
@@ -371,7 +375,7 @@ class AnthropicProvider:
         self._client = anthropic.Anthropic(api_key=key)
         self._model = model or os.getenv("SOP_MODEL", self.default_model)
 
-    def generate(self, facts: BriefingFacts, prompt: str) -> str:  # noqa: ARG002
+    def generate(self, facts: BriefingFacts, prompt: str) -> str:
         message = self._client.messages.create(
             model=self._model,
             max_tokens=4096,
@@ -396,7 +400,7 @@ class OpenAIProvider:
         self._client = OpenAI(api_key=key, base_url=os.getenv("OPENAI_BASE_URL") or None)
         self._model = model or os.getenv("SOP_MODEL", self.default_model)
 
-    def generate(self, facts: BriefingFacts, prompt: str) -> str:  # noqa: ARG002
+    def generate(self, facts: BriefingFacts, prompt: str) -> str:
         completion = self._client.chat.completions.create(
             model=self._model,
             messages=[{"role": "user", "content": prompt}],
@@ -435,14 +439,14 @@ def select_provider() -> LLMProvider:
             )
         try:
             return PROVIDERS[requested]()
-        except Exception:
+        except Exception:  # noqa: BLE001 - any SDK, auth or network error must degrade
             return TemplateProvider()
 
     for name, variables in _DETECTION_ORDER:
         if any(os.getenv(v) for v in variables):
             try:
                 return PROVIDERS[name]()
-            except Exception:
+            except Exception:  # noqa: BLE001 - any SDK, auth or network error must degrade
                 return TemplateProvider()
     return TemplateProvider()
 
@@ -548,10 +552,7 @@ def render_template(facts: BriefingFacts) -> str:
     out += [
         "## Method",
         "",
-        "Demand is Shopify and Amazon pooled, because stock is shared. The latest month is the "
-        "sell-through baseline, and demand is projected forward at each SKU's own growth rate for "
-        f"at most {MAX_PROJECTION_MONTHS} months. Cover is simulated month by month, so an incoming "
-        "order counts only in the month it arrives.",
+        METHOD_NOTE,
     ]
     return "\n".join(out).rstrip() + "\n"
 
@@ -607,7 +608,7 @@ def generate_briefing(
     for attempt in range(retries + 1):
         try:
             text = provider.generate(facts, prompt)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - provider errors must not break the run
             warnings.append(f"model call failed ({exc}); falling back to the template")
             return render_template(facts), TemplateProvider.name, warnings
 

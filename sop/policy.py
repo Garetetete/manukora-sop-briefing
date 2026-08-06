@@ -7,6 +7,8 @@ Month index: M1 = December 2025 ... M4 = March 2026 (most recent actual).
 Months 5 and beyond are projected.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 
 # M1 is December 2025; every other label is derived, so a month beyond the

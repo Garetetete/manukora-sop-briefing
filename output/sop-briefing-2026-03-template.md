@@ -53,4 +53,4 @@ Demand is growing across the range, led by Bioactive Blend Recovery 250g at 13.2
 
 ## Method
 
-Demand is Shopify and Amazon pooled, because stock is shared. The latest month is the sell-through baseline, and demand is projected forward at each SKU's own growth rate for at most 3 months. Cover is simulated month by month, so an incoming order counts only in the month it arrives.
+Demand is Shopify and Amazon pooled, because stock is shared. The most recent month is the sell-through baseline, and demand is projected forward at each SKU's own average growth rate for at most 3 months; beyond that it is held flat rather than compounded. Cover is simulated month by month, so an incoming order counts only in the month it arrives. Figures for the four months to date are observed; anything beyond them is modelled.
