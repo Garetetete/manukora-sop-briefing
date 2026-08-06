@@ -145,3 +145,50 @@ def test_req_012_a_title_supplied_by_the_model_is_not_duplicated(facts):
     text, _, _ = generate_briefing(facts, provider=model)
     assert text.count("# My own title") == 1
     assert text.count("## Method") == 1
+
+
+# --- REQ-011: any provider, or none -----------------------------------------
+
+def test_req_011_provider_is_chosen_explicitly_when_requested(monkeypatch):
+    from sop.narrative import TemplateProvider, select_provider
+
+    monkeypatch.setenv("SOP_PROVIDER", "template")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "would-otherwise-win")
+    assert isinstance(select_provider(), TemplateProvider)
+
+
+def test_req_011_unknown_provider_names_the_valid_options(monkeypatch):
+    from sop.narrative import select_provider
+
+    monkeypatch.setenv("SOP_PROVIDER", "llama")
+    with pytest.raises(ValueError, match="anthropic, gemini, openai, template"):
+        select_provider()
+
+
+def test_req_011_no_credentials_means_the_template(monkeypatch):
+    from sop.narrative import TemplateProvider, select_provider
+
+    for var in ("SOP_PROVIDER", "GEMINI_API_KEY", "GCP_PROJECT",
+                "ANTHROPIC_API_KEY", "OPENAI_API_KEY"):
+        monkeypatch.delenv(var, raising=False)
+    assert isinstance(select_provider(), TemplateProvider)
+
+
+def test_req_011_a_missing_sdk_degrades_instead_of_crashing(monkeypatch):
+    """A reviewer with a key but without the package still gets a briefing."""
+    from sop.narrative import TemplateProvider, select_provider
+
+    monkeypatch.delenv("SOP_PROVIDER", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("GCP_PROJECT", raising=False)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+    monkeypatch.setitem(__import__("sys").modules, "anthropic", None)
+    assert isinstance(select_provider(), TemplateProvider)
+
+
+def test_req_011_every_provider_satisfies_the_interface():
+    from sop.narrative import PROVIDERS
+
+    for name, cls in PROVIDERS.items():
+        assert cls.name == name
+        assert callable(cls.generate)

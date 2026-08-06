@@ -130,27 +130,41 @@ python -m sop.cli --template-only
 That is the whole setup. **No dependencies, no virtualenv, no API key, no network** — the
 deterministic path uses only the standard library, and it writes the full briefing to `output/`.
 
-To have the narrative written by the model instead of the template:
+### Bring your own model
+
+To have the narrative written by a model, install one SDK and set one key. The provider is
+detected from whichever credential is present, so there is nothing else to configure.
 
 ```bash
-pip install -r requirements.txt
-export GEMINI_API_KEY=...                # free key at aistudio.google.com
+pip install google-genai        # or: anthropic  /  openai
+export GEMINI_API_KEY=...       # free key at aistudio.google.com
 python -m sop.cli
 ```
 
-| Variable | Purpose |
-|---|---|
-| `GEMINI_API_KEY` | Gemini Developer API. Free key at aistudio.google.com |
-| `GCP_PROJECT` | Vertex AI, using application default credentials |
-| `GCP_LOCATION` | Defaults to `global` — Gemini 3.x is not served from regional endpoints |
-| `SOP_MODEL` | Defaults to `gemini-3.1-pro-preview` |
+| Provider | Install | Credential | Default model |
+|---|---|---|---|
+| Gemini | `google-genai` | `GEMINI_API_KEY` | `gemini-3.1-pro-preview` |
+| Gemini on Vertex AI | `google-genai` | `GCP_PROJECT` + application default credentials | `gemini-3.1-pro-preview` |
+| Claude | `anthropic` | `ANTHROPIC_API_KEY` | `claude-sonnet-5` |
+| GPT | `openai` | `OPENAI_API_KEY` | `gpt-4o` |
+| None | — | — | deterministic template |
+
+`SOP_MODEL` overrides the model for any provider. `SOP_PROVIDER` forces a specific one instead of
+auto-detecting. `OPENAI_BASE_URL` points the OpenAI adapter at any compatible gateway.
+`GCP_LOCATION` defaults to `global`, because Gemini 3.x is not served from regional endpoints.
+
+Nothing outside `narrative.py` knows which vendor is in use. Providers are duck-typed against a
+one-method interface, which is why the test suite substitutes a fake and why a missing SDK or a
+bad key degrades to the template instead of failing the run.
+
+The briefing committed in `output/` was generated with `gemini-3.1-pro-preview` through Vertex AI.
 
 `--template-only` skips the model entirely. The output is the same figures rendered
 deterministically, and it is held to the same numeric standard by the same test.
 
 ## Tests
 
-**67 tests, no network, no credentials, no database.**
+**72 tests, no network, no credentials, no database.**
 
 ```bash
 python -m pytest

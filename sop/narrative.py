@@ -14,6 +14,7 @@ from __future__ import annotations
 import os
 import re
 from dataclasses import dataclass, field
+from typing import Protocol
 
 from .loader import SkuRow
 from .metrics import SkuMetrics, compute_all
@@ -290,6 +291,15 @@ def build_prompt(facts: BriefingFacts) -> str:
 # --------------------------------------------------------------------------
 
 
+class LLMProvider(Protocol):
+    """What a provider must offer. Nothing else in the system depends on which
+    vendor is behind it, which is why the test suite can substitute a fake."""
+
+    name: str
+
+    def generate(self, facts: "BriefingFacts", prompt: str) -> str: ...
+
+
 class TemplateProvider:
     """Deterministic renderer. No network, no credentials, always available."""
 
@@ -303,6 +313,7 @@ class GeminiProvider:
     """Gemini via API key, or via Vertex AI when a GCP project is configured."""
 
     name = "gemini"
+    default_model = "gemini-3.1-pro-preview"
 
     def __init__(self, model: str | None = None) -> None:
         from google import genai  # imported lazily so the package stays optional
@@ -313,28 +324,110 @@ class GeminiProvider:
             self._client = genai.Client(api_key=api_key)
         elif project:
             self._client = genai.Client(
+                vertexai=True,
+                project=project,
                 # Gemini 3.x publisher models are served from the "global"
                 # endpoint; regional endpoints return 404 for them.
-                vertexai=True, project=project, location=os.getenv("GCP_LOCATION", "global")
+                location=os.getenv("GCP_LOCATION", "global"),
             )
         else:
             raise RuntimeError("no credentials: set GEMINI_API_KEY or GCP_PROJECT")
-        # One model call per run, so the stronger model is worth it.
-        self._model = model or os.getenv("SOP_MODEL", "gemini-3.1-pro-preview")
+        self._model = model or os.getenv("SOP_MODEL", self.default_model)
 
     def generate(self, facts: BriefingFacts, prompt: str) -> str:  # noqa: ARG002
         response = self._client.models.generate_content(model=self._model, contents=prompt)
         return (response.text or "").strip()
 
 
-def select_provider() -> object:
-    """Use the model when credentials exist, otherwise the template."""
-    if not (os.getenv("GEMINI_API_KEY") or os.getenv("GCP_PROJECT")):
-        return TemplateProvider()
-    try:
-        return GeminiProvider()
-    except Exception:  # missing package, bad credentials: degrade, do not crash
-        return TemplateProvider()
+class AnthropicProvider:
+    """Claude via the Anthropic API."""
+
+    name = "anthropic"
+    default_model = "claude-sonnet-5"
+
+    def __init__(self, model: str | None = None) -> None:
+        import anthropic  # lazy: optional dependency
+
+        key = os.getenv("ANTHROPIC_API_KEY")
+        if not key:
+            raise RuntimeError("no credentials: set ANTHROPIC_API_KEY")
+        self._client = anthropic.Anthropic(api_key=key)
+        self._model = model or os.getenv("SOP_MODEL", self.default_model)
+
+    def generate(self, facts: BriefingFacts, prompt: str) -> str:  # noqa: ARG002
+        message = self._client.messages.create(
+            model=self._model,
+            max_tokens=4096,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return "".join(block.text for block in message.content if block.type == "text").strip()
+
+
+class OpenAIProvider:
+    """GPT via the OpenAI API, or any OpenAI-compatible endpoint."""
+
+    name = "openai"
+    default_model = "gpt-4o"
+
+    def __init__(self, model: str | None = None) -> None:
+        from openai import OpenAI  # lazy: optional dependency
+
+        key = os.getenv("OPENAI_API_KEY")
+        if not key:
+            raise RuntimeError("no credentials: set OPENAI_API_KEY")
+        # OPENAI_BASE_URL lets this point at any OpenAI-compatible gateway.
+        self._client = OpenAI(api_key=key, base_url=os.getenv("OPENAI_BASE_URL") or None)
+        self._model = model or os.getenv("SOP_MODEL", self.default_model)
+
+    def generate(self, facts: BriefingFacts, prompt: str) -> str:  # noqa: ARG002
+        completion = self._client.chat.completions.create(
+            model=self._model,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return (completion.choices[0].message.content or "").strip()
+
+
+PROVIDERS: dict[str, type] = {
+    "template": TemplateProvider,
+    "gemini": GeminiProvider,
+    "anthropic": AnthropicProvider,
+    "openai": OpenAIProvider,
+}
+
+# Auto-detection order: whichever credential is present wins. Explicit beats
+# implicit, so SOP_PROVIDER overrides all of this.
+_DETECTION_ORDER = (
+    ("gemini", ("GEMINI_API_KEY", "GCP_PROJECT")),
+    ("anthropic", ("ANTHROPIC_API_KEY",)),
+    ("openai", ("OPENAI_API_KEY",)),
+)
+
+
+def select_provider() -> LLMProvider:
+    """Pick a provider from the environment, falling back to the template.
+
+    A missing package or a bad credential degrades to the template rather than
+    crashing: the briefing is always produced.
+    """
+    requested = (os.getenv("SOP_PROVIDER") or "").strip().lower()
+    if requested:
+        if requested not in PROVIDERS:
+            raise ValueError(
+                f"unknown SOP_PROVIDER {requested!r}; choose one of "
+                f"{', '.join(sorted(PROVIDERS))}"
+            )
+        try:
+            return PROVIDERS[requested]()
+        except Exception:
+            return TemplateProvider()
+
+    for name, variables in _DETECTION_ORDER:
+        if any(os.getenv(v) for v in variables):
+            try:
+                return PROVIDERS[name]()
+            except Exception:
+                return TemplateProvider()
+    return TemplateProvider()
 
 
 # --------------------------------------------------------------------------

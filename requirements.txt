@@ -1,1 +1,5 @@
-google-genai>=1.0.0
+# All optional. The deterministic path runs on the standard library alone.
+# Install only the provider you intend to use.
+google-genai>=1.0.0     # Gemini, by API key or through Vertex AI
+# anthropic>=0.40.0     # Claude
+# openai>=1.50.0        # GPT, or any OpenAI-compatible endpoint
