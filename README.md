@@ -67,14 +67,19 @@ business rather than resolving.
 Python 3.11+. No database, no containers, no credentials required.
 
 ```bash
-pip install -r requirements.txt          # only needed for the model-written narrative
-python -m sop.cli --template-only        # full analysis, offline, deterministic
+git clone https://github.com/Garetetete/manukora-sop-briefing.git
+cd manukora-sop-briefing
+python -m sop.cli --template-only
 ```
 
-With credentials the narrative is written by Gemini:
+That is the whole setup. **No dependencies, no virtualenv, no API key, no network** — the
+deterministic path uses only the standard library, and it writes the full briefing to `output/`.
+
+To have the narrative written by the model instead of the template:
 
 ```bash
-export GCP_PROJECT=your-project          # Vertex AI, or use GEMINI_API_KEY
+pip install -r requirements.txt
+export GEMINI_API_KEY=...                # free key at aistudio.google.com
 python -m sop.cli
 ```
 
@@ -129,7 +134,7 @@ docs/
   prompt-log.md             prompt v1 to v2, and where the AI was wrong
   assumptions.md            every judgement call, and what the extract lacks
   part2-...md               Morning Intelligence Brief architecture
-src/sop/
+sop/
   policy.py                 business exceptions, declarative and in one place
   loader.py                 read and validate; refuses to guess
   metrics.py                trend, projection, cover, revenue — no AI

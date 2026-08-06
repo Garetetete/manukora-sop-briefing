@@ -5,7 +5,7 @@ description = "Monthly S&OP briefing automation from a sales and inventory extra
 requires-python = ">=3.11"
 
 [tool.pytest.ini_options]
-pythonpath = ["src", "."]
+pythonpath = ["."]
 testpaths = ["tests"]
 addopts = "-q"
 

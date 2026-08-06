@@ -42,7 +42,7 @@ trusted — cover ratios that did not reconcile, and units-on-order treated as s
 
 ### v2 — what the system actually uses
 
-The full text is in [`src/sop/narrative.py`](../src/sop/narrative.py) (`SYSTEM_INSTRUCTION`,
+The full text is in [`sop/narrative.py`](../sop/narrative.py) (`SYSTEM_INSTRUCTION`,
 `_SECTIONS`, `facts_block`). The shape:
 
 ```
@@ -119,4 +119,13 @@ and drafting prose. The `docs` and `README` were drafted with AI and edited by h
    `us-central1`. The 3.x publisher models are served from the `global` Vertex endpoint. Found by
    probing candidates directly rather than guessing.
 
+6. **The documented run command did not work.** I had been running with `PYTHONPATH=src` in my
+   own shell the whole time, so a src-layout import error never surfaced. Cloning the published
+   repository into a clean directory and following my own README produced
+   `ModuleNotFoundError: No module named 'sop'` on the very first command. The package now lives
+   at the repository root, so `python -m sop.cli --template-only` works from a fresh clone with
+   no install step at all.
+
 Items 1 to 3 were found by tests, not by reading code. That is the argument for writing them.
+Item 6 was found by using the artifact the way a stranger would, which no test would have caught:
+the suite passed the entire time.
