@@ -7,6 +7,31 @@ executive's attention and one line on why each matters. Not a dashboard link, no
 everything that moved. If nothing crosses the materiality bar, the brief says so in one sentence.
 "Nothing needs you today" is a feature: it is what makes the other days credible.
 
+```mermaid
+flowchart TD
+    subgraph SRC["Sources · pulled nightly at 05:00 America/Los_Angeles"]
+        direction LR
+        SH["Shopify<br/>orders, sessions"]
+        AM["Amazon SP-API<br/>sales, traffic, buy box"]
+        CI["Cin7<br/>stock, open POs"]
+        KL["Klaviyo<br/>flow + campaign revenue"]
+        GO["Gorgias<br/>ticket volume by tag"]
+    end
+
+    SRC --> N8N["n8n scheduled workflow<br/>idempotency key per source/date/sku"]
+    N8N --> DB[("daily_facts<br/>Postgres")]
+    DB --> DETECT["Deterministic detection<br/>expected range from 8 weeks,<br/>matched by day of week"]
+    DETECT --> SCORE["Materiality score<br/>dollar impact × deviation"]
+    SCORE -->|"below threshold"| STORE["Stored, never sent"]
+    SCORE -->|"top 3 only"| WRITE["Model writes prose<br/>same numeric guard as Part 1"]
+    WRITE --> HOLD["Brief held, not sent yet"]
+
+    HOLD --> TRIGGER{"Executive active<br/>in Slack?"}
+    TRIGGER -->|yes| SEND["Slack DM"]
+    TRIGGER -->|"not by 11:00 in their<br/>Google Calendar timezone"| SEND
+    SEND -->|"something material changes"| EDIT["chat.update the same message<br/>never a second ping"]
+```
+
 ## How it works
 
 **Ingest, 05:00 America/Los_Angeles.** n8n runs a scheduled workflow that pulls the previous

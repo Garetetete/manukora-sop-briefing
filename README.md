@@ -24,6 +24,61 @@ Three things follow from this. The output is **verifiable** — every figure tra
 with a test. The system **works without a model**, so the full analysis runs with no API key and
 no network. And a model failure **degrades** instead of breaking.
 
+## How it flows
+
+```mermaid
+flowchart TD
+    CSV["data/mock_sales.csv"] --> LOADER
+
+    subgraph DET["Deterministic Python — tested, no model involved"]
+        direction TB
+        LOADER["loader.py<br/>validate · pool Shopify + Amazon"]
+        METRICS["metrics.py<br/>trend · bounded projection<br/>time-phased cover · revenue"]
+        RULES["rules.py<br/>reorder + quantity + timing<br/>priority · tensions · data quality"]
+        LOADER --> METRICS --> RULES
+    end
+
+    RULES --> FACTS["Computed facts<br/>the only figures that may be stated"]
+
+    subgraph MODEL["Model layer"]
+        direction TB
+        PROMPT["narrative.py<br/>writes prose, never calculates"]
+        GUARD{"Numeric guard<br/>is every figure<br/>in the facts?"}
+        PROMPT --> GUARD
+    end
+
+    FACTS --> PROMPT
+    GUARD -->|yes| OUT["output/sop-briefing-2026-03.md"]
+    GUARD -->|"no · retry once"| PROMPT
+    GUARD -->|"no · again"| TPL
+    FACTS --> TPL["Deterministic template<br/>same figures, no model"]
+    TPL --> OUT
+```
+
+The template is not a stub. It is a full second path to the same briefing, held to the same
+numeric standard by the same test, which is what makes `--template-only` a real mode rather than
+a degraded one.
+
+## Why this is a Python CLI and not an n8n workflow
+
+Manukora runs on n8n, so the choice deserves a reason rather than a preference.
+
+**n8n earns its place in orchestration**: maintained connectors for Shopify, Amazon SP-API, Cin7,
+Klaviyo, Gorgias and Slack, with OAuth, pagination and rate limits handled; scheduling, retries
+and alerting as infrastructure instead of code; and a run history someone outside engineering can
+read and re-run. That is exactly how [Part 2](docs/part2-morning-intelligence-brief.md) proposes
+building the daily brief.
+
+**It is the wrong home for this part.** The work here is business logic — a month-by-month
+inventory simulation, per-SKU policy exceptions, revenue ranking, and a numeric guard on the
+model's output. In n8n that becomes JavaScript inside code nodes: no unit tests, no meaningful
+diffs, nothing reusable. The brief asks how the maths and the output were verified, and a canvas
+cannot be tested.
+
+So: **n8n orchestrates, Python decides.** Fetching, scheduling, delivery and retries belong to
+the workflow engine; computation and correctness belong in tested code. The two parts of this
+submission are the same argument seen from both ends.
+
 ## What it produces
 
 From the twelve-SKU extract it flags four reorders, ranked by revenue at stake:
