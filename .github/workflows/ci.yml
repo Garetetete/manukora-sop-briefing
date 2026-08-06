@@ -4,6 +4,26 @@ on: [push, pull_request]
 
 jobs:
   test:
+    # Three operating systems and two Python versions, because "it runs on my
+    # machine" is exactly the claim this repository has already got wrong once.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python: ["3.11", "3.12"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: pip install -r requirements-dev.txt
+      - name: Tests run with no credentials and no network access
+        run: python -m pytest
+      - name: The briefing generates with no provider configured
+        run: python -m sop.cli --template-only --output briefing-ci.md
+
+  lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -11,8 +31,4 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install -r requirements-dev.txt
-      - name: Tests run with no credentials and no network access
-        run: python -m pytest
       - run: python -m ruff check .
-      - name: The briefing generates without any provider configured
-        run: python -m sop.cli --template-only --output /tmp/ci-briefing.md

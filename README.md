@@ -1,5 +1,7 @@
 # Monthly S&OP Briefing Automation
 
+[![CI](https://github.com/Garetetete/manukora-sop-briefing/actions/workflows/ci.yml/badge.svg)](https://github.com/Garetetete/manukora-sop-briefing/actions/workflows/ci.yml)
+
 Turns a monthly sales and inventory extract into a briefing a non-technical executive can read in
 five minutes and act on: what changed, what is at risk, what to do next.
 
@@ -170,7 +172,8 @@ deterministically, and it is held to the same numeric standard by the same test.
 
 ## Tests
 
-**77 tests, no network, no credentials, no database.**
+**77 tests, no network, no credentials, no database.** CI runs them on Linux, macOS and Windows,
+against Python 3.11 and 3.12.
 
 ```bash
 pip install -r requirements-dev.txt
