@@ -138,6 +138,11 @@ python -m sop.cli --template-only
 That is the whole setup. **No dependencies, no virtualenv, no API key, no network** — the
 deterministic path uses only the standard library, and it writes the full briefing to `output/`.
 
+![Cloning the repository and running the briefing and the test suite from a clean directory](docs/img/clone-and-run.png)
+
+The analysis runs before anything is installed. `pip install` appears only because the test suite
+needs pytest.
+
 ### Bring your own model
 
 To have the narrative written by a model, install one SDK and set one key. The provider is
