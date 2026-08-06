@@ -2,9 +2,9 @@
 
 ## What I would build
 
-A daily Slack direct message, under 200 words, naming at most three things and one line on why
-each matters. Not a dashboard link, not a digest of everything that moved. If nothing crosses the
-materiality bar, the brief says so in one sentence. "Nothing needs you today" is a feature: it is
+A daily Slack direct message, under 200 words, naming at most three things and why each matters.
+Not a dashboard link, not a digest of everything that moved. If nothing crosses the materiality
+bar, it says so in one sentence. "Nothing needs you today" is a feature: it is
 what makes the other days credible.
 
 ```mermaid
@@ -88,8 +88,7 @@ anything consistently ignored. The system should get quieter over time, not loud
 
 ## Failure modes
 
-The one that matters most is **silent partial data**. If Amazon's report is late, the brief must
-say "Amazon figures unavailable, totals exclude Amazon" rather than quietly reporting a 30% drop
+The worst is **silent partial data**. If Amazon's report is late, the brief must say "Amazon figures unavailable, totals exclude Amazon" rather than quietly reporting a 30% drop
 that is really a missing file. Every source carries a freshness stamp, and a stale source becomes
 a caveat line, not a hidden gap.
 
