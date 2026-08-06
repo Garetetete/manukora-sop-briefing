@@ -72,6 +72,9 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Reorder recommendations: {len(facts.recommendations)}")
     for rec in facts.recommendations:
         print(f"  - {rec.sku}: {rec.reorder_units} units by {rec.order_by_label}")
+    print(f"Watch list (decide before next month): {len(facts.watch_items)}")
+    for item in facts.watch_items:
+        print(f"  - {item.sku}: order by {item.order_by_label}")
     print(f"Judgement calls raised: {len(facts.tensions)}")
     print(f"Data-quality conflicts: {len(facts.data_quality)}")
     for warning in warnings:
